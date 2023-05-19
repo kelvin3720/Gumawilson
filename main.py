@@ -109,7 +109,7 @@ def get_solo_rank_lp(summoner_id: str) -> dict:
     response = call_api.call(url, headers)
 
     response = requests.get(url, headers=headers)
-    result: List[dict] = response
+    result: List[dict] = response.json()
 
     # List for return
     return_dict = {}
@@ -186,14 +186,23 @@ async def check(ctx, summoner_name=None, period=None) -> None:
     end_time = local_end.astimezone(pytz.utc)
 
     # Get summoner's puuid
-    puuid, summoner_id = get_ids(summoner_name)
+    try:
+        puuid, summoner_id = get_ids(summoner_name)
+    except Exception as e:
+        await ctx.send(f"{str(e)} when getting summoner id")
+        return
 
     if puuid is None:
         await ctx.send(f"Error getting puuid")
         return
 
     # Get the list of match ids in the period of time
-    match_id_list = get_solo_ranked_match_ids(puuid, start_time, end_time)
+    try:
+        match_id_list = get_solo_ranked_match_ids(puuid, start_time, end_time)
+    except Exception as e:
+        await ctx.send(str(e))
+        f"{str(e)} when getting match ids"
+        return
 
     if match_id_list is None:
         await ctx.send(f"Error getting match_id_list")
@@ -212,14 +221,24 @@ async def check(ctx, summoner_name=None, period=None) -> None:
         return
 
     # Calculate the result for displaying
-    wins, losses = count_win_lose(match_detail_list_raw, puuid)
+    try:
+        wins, losses = count_win_lose(match_detail_list_raw, puuid)
+    except Exception as e:
+        await ctx.send(str(e))
+        f"{str(e)} when getting number of win and losses"
+        return
     games = wins + losses
 
     # Calculate win rate in selected period
     win_rate = str(int(wins * 100 / games)) + "%"
 
     # Use LEAGUE-V4 to get current rank and LP
-    profile_dict = get_solo_rank_lp(summoner_id)
+    try:
+        profile_dict = get_solo_rank_lp(summoner_id)
+    except Exception as e:
+        await ctx.send(str(e))
+        f"{str(e)} when getting rank and lp"
+        return
 
     # Calculate the total win rate
     total_wins = profile_dict["total_wins"]

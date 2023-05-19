@@ -1,12 +1,12 @@
 from datetime import datetime, timedelta
 import os
-import time
 from typing import List, Tuple
 import requests
 import discord
 from discord.ext import commands
 import pytz
 from tzlocal import get_localzone
+import call_api
 
 # CONSTANT
 DISCORD_TOKEN = os.getenv("GUMAWILSON_DISCORD_TOKEN")
@@ -39,17 +39,12 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 def get_ids(summoner_name: str) -> Tuple[str, str]:
     url = f"https://{region_v4}.api.riotgames.com/lol/summoner/v4/summoners/by-name/{summoner_name}"
     headers = {"X-Riot-Token": RIOT_API_KEY}
-    response = requests.get(url, headers=headers)
 
-    # Wait and retry if Rate limit for API exceeded
-    while response.status_code == 429:
-        time.sleep(1)
-        response = requests.get(url, headers=headers)
+    response = call_api.call(url, headers)
+    puuid: str = response["puuid"]
+    summoner_id: str = response["id"]
 
-    if response.status_code == 200:
-        puuid: str = response.json()["puuid"]
-        summoner_id = response.json()["id"]
-        return puuid, summoner_id
+    return puuid, summoner_id
 
 
 # Get list of match ids by the summoner name and a period of time
@@ -71,31 +66,20 @@ def get_solo_ranked_match_ids(
         "endTime": end_time,
         "count": 100,
     }
-    response = requests.get(url, params, headers=headers)
 
-    # Wait and retry if Rate limit for API exceeded
-    while response.status_code == 429:
-        time.sleep(1)
-        response = requests.get(url, params, headers=headers)
+    response = call_api.call(url, headers, params)
 
-    if response.status_code == 200:
-        matches: List[str] = response.json()
-        return matches
+    return response
 
 
 # Get match details by match id
 def get_match_details(match_id: str) -> dict:
     url = f"https://{region_v5}.api.riotgames.com/lol/match/v5/matches/{match_id}"
     headers = {"X-Riot-Token": RIOT_API_KEY}
-    response = requests.get(url, headers=headers)
 
-    # Wait and retry if Rate limit for API exceeded
-    while response.status_code == 429:
-        time.sleep(1)
-        response = requests.get(url, headers=headers)
+    response = call_api.call(url, headers)
 
-    if response.status_code == 200:
-        return response.json()
+    return response
 
 
 # Count the number of win of lose of a player given the match
@@ -121,44 +105,45 @@ def count_win_lose(
 def get_solo_rank_lp(summoner_id: str) -> dict:
     url = f"https://{region_v4}.api.riotgames.com/lol/league/v4/entries/by-summoner/{summoner_id}"
     headers = {"X-Riot-Token": RIOT_API_KEY}
+
+    response = call_api.call(url, headers)
+
     response = requests.get(url, headers=headers)
+    result: List[dict] = response
 
-    # Wait and retry if Rate limit for API exceeded
-    while response.status_code == 429:
-        time.sleep(1)
-        response = requests.get(url, headers=headers)
+    # List for return
+    return_dict = {}
+    for profile in result:
+        if profile["queueType"] != "RANKED_SOLO_5x5":
+            continue
 
-    if response.status_code == 200:
-        result: List[dict] = response.json()
-        # List for return
-        return_dict = {}
-        for profile in result:
-            if profile["queueType"] != "RANKED_SOLO_5x5":
-                continue
+        # Append str in format like "SILVER III"
+        tier = profile["tier"]
+        rank = profile["rank"]
+        return_dict.update({"rank": f"{tier} {rank}"})
 
-            # Append str in format like "SILVER III"
-            tier = profile["tier"]
-            rank = profile["rank"]
-            return_dict.update({"rank": f"{tier} {rank}"})
+        # Append str LP
+        lp = profile["leaguePoints"]
+        return_dict.update({"lp": str(lp)})
 
-            # Append str LP
-            lp = profile["leaguePoints"]
-            return_dict.update({"lp": str(lp)})
-
-            # Append total win and lose
-            wins = profile["wins"]
-            losses = profile["losses"]
-            return_dict.update({"total_wins": wins})
-            return_dict.update({"total_losses": losses})
+        # Append total win and lose
+        wins = profile["wins"]
+        losses = profile["losses"]
+        return_dict.update({"total_wins": wins})
+        return_dict.update({"total_losses": losses})
 
         return return_dict
 
 
 # Discord bot commands
 @bot.command()
-async def check(
-    ctx, summoner_name=default_summoner_name, period=default_period
-) -> None:
+async def check(ctx, summoner_name=None, period=None) -> None:
+    # Use default if None is given
+    if summoner_name is None:
+        summoner_name = default_summoner_name
+    if period is None:
+        period = default_period
+
     await ctx.send(
         f"Checking {summoner_name} in {region_v4}, {region_v5} for {period}...(Max 100 games)"
     )

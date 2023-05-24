@@ -7,6 +7,7 @@ from discord.ext import commands
 import pytz
 from tzlocal import get_localzone
 import call_api
+import database_operations as dbo
 
 # CONSTANT
 DISCORD_TOKEN = os.getenv("GUMAWILSON_DISCORD_TOKEN")
@@ -36,15 +37,12 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Helper functions
 # Get summoner puuid by name
-def get_ids(summoner_name: str) -> Tuple[str, str]:
+def get_summoner_details(summoner_name: str) -> dict:
     url = f"https://{region_v4}.api.riotgames.com/lol/summoner/v4/summoners/by-name/{summoner_name}"
     headers = {"X-Riot-Token": RIOT_API_KEY}
 
     response = call_api.call(url, headers)
-    puuid: str = response["puuid"]
-    summoner_id: str = response["id"]
-
-    return puuid, summoner_id
+    return response
 
 
 # Get list of match ids by the summoner name and a period of time
@@ -78,27 +76,7 @@ def get_match_details(match_id: str) -> dict:
     headers = {"X-Riot-Token": RIOT_API_KEY}
 
     response = call_api.call(url, headers)
-
     return response
-
-
-# Count the number of win of lose of a player given the match
-def count_win_lose(
-    match_detail_list: List[dict], puuid: str
-) -> Tuple[int, int]:
-    wins = 0
-    losses = 0
-    for match in match_detail_list:
-        for participant in match["info"]["participants"]:
-            # Skip other players
-            if participant["puuid"] != puuid:
-                continue
-            if participant["win"]:
-                wins += 1
-            else:
-                losses += 1
-
-    return wins, losses
 
 
 # Get the current solo rank and LP by summoner id
@@ -135,6 +113,17 @@ def get_solo_rank_lp(summoner_id: str) -> dict:
         return return_dict
 
 
+# Get the timestamp of gameEndTimestamp by match id, return timestamp in seconds
+def get_game_end_timestamp(match_id: str) -> int:
+    url = f"https://{region_v5}.api.riotgames.com/lol/match/v5/matches/{match_id}"
+    headers = {"X-Riot-Token": RIOT_API_KEY}
+
+    response = call_api.call(url, headers)
+    # Convert to seconds timestamp
+    timestamp = response["info"]["gameEndTimestamp"] // 1000
+    return timestamp
+
+
 # Discord bot commands
 @bot.command()
 async def check(ctx, summoner_name=None, period=None) -> None:
@@ -159,7 +148,7 @@ async def check(ctx, summoner_name=None, period=None) -> None:
         start_time = datetime.combine(yesterday, datetime.min.time())
         end_time = datetime.combine(yesterday, datetime.max.time())
     elif period == "last_week":
-        last_sunday = today - timedelta(days=today.weekday() + 1)
+        last_sunday = today - timedelta(days=today.weekday() + 1 + 7)
         last_saturday = last_sunday + timedelta(days=6)
         start_time = datetime.combine(last_sunday, datetime.min.time())
         end_time = datetime.combine(last_saturday, datetime.max.time())
@@ -187,7 +176,9 @@ async def check(ctx, summoner_name=None, period=None) -> None:
 
     # Get summoner's puuid
     try:
-        puuid, summoner_id = get_ids(summoner_name)
+        details = get_summoner_details(summoner_name)
+        puuid: str = details["puuid"]
+        summoner_id: str = details["id"]
     except Exception as e:
         await ctx.send(f"{str(e)} when getting summoner id")
         return
@@ -196,9 +187,36 @@ async def check(ctx, summoner_name=None, period=None) -> None:
         await ctx.send(f"Error getting puuid")
         return
 
+    # Check if summoner exists in database, create new if not exist
+    try:
+        summoner_exist = dbo.summoner_exists(puuid)
+        if not summoner_exist:
+            dbo.add_summoner(summoner_name, summoner_id, puuid)
+            summoner_exist = True
+    except Exception as e:
+        await ctx.send(
+            f"Failed to collect database data, using Riot data directly"
+        )
+
     # Get the list of match ids in the period of time
     try:
-        match_id_list = get_solo_ranked_match_ids(puuid, start_time, end_time)
+        match_id_list = []
+        result = get_solo_ranked_match_ids(puuid, start_time, end_time)
+        match_id_list.extend(result)
+        # Continue using the api with different time params if the length of list is 100
+        # Riot Match-V5 API can at most reply 100 match ids in one call
+        while len(result) == 100:
+            last_match_in_list = result[-1]
+            # Get the gameEndTimestamp by Match-V5 API
+            # API for a specific match uses timestamp in milliseconds,
+            # but timestamp for list of match ids uses timestamp in seconds
+            end_time_extend = get_game_end_timestamp(last_match_in_list)
+            result = get_solo_ranked_match_ids(
+                puuid, start_time, end_time_extend
+            )
+            match_id_list.extend(result)
+        # Remove duplicate
+        match_id_list = list(set(match_id_list))
     except Exception as e:
         await ctx.send(str(e))
         f"{str(e)} when getting match ids"
@@ -211,18 +229,48 @@ async def check(ctx, summoner_name=None, period=None) -> None:
         await ctx.send(f"No match is played in the time period")
         return
 
-    # Get the details of matches
-    match_detail_list_raw = []
-    for match_id in match_id_list:
-        match_detail_list_raw.append(get_match_details(match_id))
+    # Check if the matches exist in db
+    match_list_not_in_db = dbo.get_match_ids_not_in_db(match_id_list)
 
-    if match_detail_list_raw is None:
-        await ctx.send(f"Error getting match_detail_list_raw")
-        return
+    for match_id in match_list_not_in_db:
+        result = get_match_details(match_id)
+        # match_detail (a row in match_detail_list) should be:
+        # [match_id, region_v5, gameStartTimeStamp, gameMode, gameType, gameDuration, gameEndTimestamp, queueId, platformId, game_end_datetime]
+        # Where item in snake case is from python and camel case is from Riot's API
+        # Timestamps here are in milliseconds (From Riot Match-V5 API)
+        match_detail = [match_id, region_v5]
+        # gameStartTimestamp
+        match_detail.append(result["info"]["gameStartTimestamp"])
+        # gameMode
+        match_detail.append(result["info"]["gameMode"])
+        # gameType
+        match_detail.append(result["info"]["gameType"])
+        # gameDuration
+        match_detail.append(result["info"]["gameDuration"])
+        # gameEndTimestamp
+        match_detail.append(result["info"]["gameEndTimestamp"])
+        # gameEndedInEarlySurrender
+        early_surrender = result["info"]["participants"][0]["gameEndedInSurrender"]
+        match_detail.append(early_surrender)
+        # queueId
+        match_detail.append(result["info"]["queueId"])
+        # platformId
+        match_detail.append(result["info"]["platformId"])
+        # Calculate game_end_datetime GMT in string
+        game_end = result["info"]["gameEndTimestamp"]
+        # Translate to timestamp in seconds
+        game_end_datetime = datetime.fromtimestamp(game_end/1000.0)
+        match_detail.append(game_end_datetime.strftime("%Y-%m-%d %H:%M:%S"))
+
+        # Insert the row to table matches
+        dbo.insert_to_matches(match_detail)
+
+        # Insert player's details of this match to match_players table
+        dbo.insert_to_match_players(result)
 
     # Calculate the result for displaying
     try:
-        wins, losses = count_win_lose(match_detail_list_raw, puuid)
+        wins, losses = dbo.count_win_lose(match_id_list, puuid)
     except Exception as e:
         await ctx.send(str(e))
         f"{str(e)} when getting number of win and losses"
@@ -230,7 +278,10 @@ async def check(ctx, summoner_name=None, period=None) -> None:
     games = wins + losses
 
     # Calculate win rate in selected period
-    win_rate = str(int(wins * 100 / games)) + "%"
+    if not games == 0:
+        win_rate = str(int(wins * 100 / games)) + "%"
+    else:
+        win_rate = "0%"
 
     # Use LEAGUE-V4 to get current rank and LP
     try:
@@ -244,7 +295,10 @@ async def check(ctx, summoner_name=None, period=None) -> None:
     total_wins = profile_dict["total_wins"]
     total_losses = profile_dict["total_losses"]
     total_games = total_wins + total_losses
-    total_win_rate = str(int(total_wins * 100 / total_games)) + "%"
+    if not total_games == 0:
+        total_win_rate = str(int(total_wins * 100 / total_games)) + "%"
+    else:
+        total_win_rate = "0%"
 
     # Display details on chat
     message = f"""Player: {summoner_name}

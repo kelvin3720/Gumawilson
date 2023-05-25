@@ -12,7 +12,12 @@ import database_operations as dbo
 # CONSTANT
 DISCORD_TOKEN = os.getenv("GUMAWILSON_DISCORD_TOKEN")
 RIOT_API_KEY = os.getenv("GUMAWILSON_RIOT_API_KEY")
-DEFAULT_PERIOD_LIST = ["today", "yesterday", "last_week", "last_month"]
+DEFAULT_PERIOD_LIST = [
+    "today",
+    "yesterday",
+    "last_week",
+    "last_month",
+]
 
 
 # Global variables
@@ -32,7 +37,11 @@ local_timezone = str(get_localzone())
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(
+    command_prefix="!",
+    intents=intents,
+    help_command=commands.DefaultHelpCommand(no_category="Commands"),
+)
 
 
 # Helper functions
@@ -126,12 +135,41 @@ def get_game_end_timestamp(match_id: str) -> int:
 
 # Discord bot commands
 @bot.command()
-async def check(ctx, summoner_name=None, period=None) -> None:
+async def check(
+    ctx,
+    summoner_name=commands.parameter(
+        default=None, description="Name of summoner"
+    ),
+    period=commands.parameter(
+        default=None,
+        description='One of ["today", "yesterday", "last_week", "last_month"]',
+    ),
+) -> None:
+    """Check a player, call !check only will check the default one"""
     # Use default if None is given
     if summoner_name is None:
         summoner_name = default_summoner_name
     if period is None:
         period = default_period
+
+    if summoner_name == "":
+        await ctx.send("Please specify a summoner name or set a default one")
+        return
+    if period == "":
+        await ctx.send(
+            'Please specify a period or set a default one from ["today", "yesterday", "last_week", "last_month"]'
+        )
+        return
+    if region_v4 == "":
+        await ctx.send(
+            'Please set region_v4 from ["br1", "eun1", "euw1", "jp1", "kr", "la1", "la2", "na1", "oc1", "tr1", "ru", "ph2", "sg2", "th2", "tw2", "vn2"]'
+        )
+        return
+    if region_v5 == "":
+        await ctx.send(
+            'Please set region_v5 from ["americas", "asia", "europe", "sea"]'
+        )
+        return
 
     await ctx.send(
         f"Checking {summoner_name} in {region_v4}, {region_v5} for {period}..."
@@ -321,11 +359,23 @@ Total win rate: {total_win_rate}"""
 @bot.command()
 async def set_default(
     ctx,
-    summoner_name=default_summoner_name,
-    region4=region_v4,
-    region5=region_v5,
-    period=default_period,
+    summoner_name=commands.parameter(
+        default=default_summoner_name, description="Name of summoner"
+    ),
+    region4=commands.parameter(
+        default=region_v4,
+        description='One of ["br1", "eun1", "euw1", "jp1", "kr", "la1", "la2", "na1", "oc1", "tr1", "ru", "ph2", "sg2", "th2", "tw2", "vn2"]',
+    ),
+    region5=commands.parameter(
+        default=region_v5,
+        description='One of ["americas", "asia", "europe", "sea"]',
+    ),
+    period=commands.parameter(
+        default=default_period,
+        description='One of ["today", "yesterday", "last_week", "last_month"]',
+    ),
 ) -> None:
+    """Set the default values"""
     # If wrong period in inputted
     if period not in DEFAULT_PERIOD_LIST:
         await ctx.send(
@@ -345,6 +395,7 @@ async def set_default(
 
 @bot.command()
 async def info(ctx):
+    """Show legal boilerplate"""
     legal_boilerplate = "Gumawilson isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc."
     await ctx.send(legal_boilerplate)
 

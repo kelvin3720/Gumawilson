@@ -134,7 +134,7 @@ async def check(ctx, summoner_name=None, period=None) -> None:
         period = default_period
 
     await ctx.send(
-        f"Checking {summoner_name} in {region_v4}, {region_v5} for {period}...(Max 100 games)"
+        f"Checking {summoner_name} in {region_v4}, {region_v5} for {period}..."
     )
 
     # Get the start_time according to period
@@ -250,7 +250,9 @@ async def check(ctx, summoner_name=None, period=None) -> None:
         # gameEndTimestamp
         match_detail.append(result["info"]["gameEndTimestamp"])
         # gameEndedInEarlySurrender
-        early_surrender = result["info"]["participants"][0]["gameEndedInSurrender"]
+        early_surrender = result["info"]["participants"][0][
+            "gameEndedInSurrender"
+        ]
         match_detail.append(early_surrender)
         # queueId
         match_detail.append(result["info"]["queueId"])
@@ -259,7 +261,7 @@ async def check(ctx, summoner_name=None, period=None) -> None:
         # Calculate game_end_datetime GMT in string
         game_end = result["info"]["gameEndTimestamp"]
         # Translate to timestamp in seconds
-        game_end_datetime = datetime.fromtimestamp(game_end/1000.0)
+        game_end_datetime = datetime.fromtimestamp(game_end / 1000.0)
         match_detail.append(game_end_datetime.strftime("%Y-%m-%d %H:%M:%S"))
 
         # Insert the row to table matches

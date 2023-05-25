@@ -24,7 +24,7 @@ def call_stored_procedure_no_return(
 # Call a stored procedure with return valie
 def call_stored_procedure_with_return(
     procedure_name: str, params: tuple
-) -> list | bool:
+) -> list:
     cursor = db.cursor()
     result = cursor.callproc(procedure_name, params)
     cursor.close()
@@ -92,7 +92,9 @@ def insert_to_match_players(api_result: dict) -> None:
 
         # Insert to match_players table
         params = tuple(param_list)
-        call_stored_procedure_no_return("sp_add_new_match_players_record", params)
+        call_stored_procedure_no_return(
+            "sp_add_new_match_players_record", params
+        )
 
 
 # Count the number of wins and losses from match_id_list and puuid

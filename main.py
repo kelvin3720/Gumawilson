@@ -186,7 +186,8 @@ async def check(
         start_time = datetime.combine(yesterday, datetime.min.time())
         end_time = datetime.combine(yesterday, datetime.max.time())
     elif period == "last_week":
-        last_sunday = today - timedelta(days=today.weekday() + 1 + 7)
+        date_index = (today.weekday() +1) % 7
+        last_sunday = today - timedelta(date_index + 7)
         last_saturday = last_sunday + timedelta(days=6)
         start_time = datetime.combine(last_sunday, datetime.min.time())
         end_time = datetime.combine(last_saturday, datetime.max.time())
@@ -232,9 +233,8 @@ async def check(
             dbo.add_summoner(summoner_name, summoner_id, puuid)
             summoner_exist = True
     except Exception as e:
-        await ctx.send(
-            f"Failed to collect database data, using Riot data directly"
-        )
+        await ctx.send(f"Failed to collect database data")
+        return
 
     # Get the list of match ids in the period of time
     try:

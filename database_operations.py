@@ -8,10 +8,10 @@ def call_stored_procedure_no_return(
     procedure_name: str, params: tuple
 ) -> None:
     db = mysql.connector.connect(
-    host="localhost",
-    user=os.getenv("GUMAWILSON_SQL_AC"),
-    password=os.getenv("GUMAWILSON_SQL_PW"),
-    database="gumawilson",
+        host="localhost",
+        user=os.getenv("GUMAWILSON_SQL_AC"),
+        password=os.getenv("GUMAWILSON_SQL_PW"),
+        database="gumawilson",
     )
     cursor = db.cursor()
     cursor.callproc(procedure_name, params)
@@ -25,10 +25,10 @@ def call_stored_procedure_with_return(
     procedure_name: str, params: tuple
 ) -> list:
     db = mysql.connector.connect(
-    host="localhost",
-    user=os.getenv("GUMAWILSON_SQL_AC"),
-    password=os.getenv("GUMAWILSON_SQL_PW"),
-    database="gumawilson",
+        host="localhost",
+        user=os.getenv("GUMAWILSON_SQL_AC"),
+        password=os.getenv("GUMAWILSON_SQL_PW"),
+        database="gumawilson",
     )
     cursor = db.cursor()
     result = cursor.callproc(procedure_name, params)
@@ -110,9 +110,13 @@ def count_win_lose(match_id_list: List[str], puuid: str) -> Tuple[int, int]:
 
     for id in match_id_list:
         params = (id, puuid, 0)
-        if call_stored_procedure_with_return("sp_check_is_win", params)[2]:
+        # 1: win, 0: lose, -1: remake
+        match_result = call_stored_procedure_with_return(
+            "sp_check_is_win", params
+        )[2]
+        if match_result == 1:
             wins += 1
-        else:
+        elif match_result == 0:
             losses += 1
 
     return wins, losses

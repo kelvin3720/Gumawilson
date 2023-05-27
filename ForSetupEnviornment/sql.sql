@@ -185,11 +185,15 @@ USE `gumawilson`$$
 CREATE PROCEDURE `sp_check_is_win` (
   IN p_match_id VARCHAR(45),
   IN p_puuid  VARCHAR(100),
-  OUT p_win BOOLEAN
+  OUT p_win INT
 )
 BEGIN
-  SELECT win INTO p_win FROM match_players
-  WHERE puuid = p_puuid AND match_id = p_match_id;
+  SELECT IFNULL(match_players.win, -1) INTO p_win FROM match_players
+  INNER JOIN matches
+  ON  match_players.puuid = p_puuid 
+  AND match_players.match_id = p_match_id
+  AND matches.match_id = p_match_id
+  AND matches.gameDuration > 210;
 END$$
 
 DELIMITER ;

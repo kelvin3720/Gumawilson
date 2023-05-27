@@ -3,31 +3,37 @@ from typing import List, Tuple
 import mysql.connector
 
 
-db = mysql.connector.connect(
-    host="localhost",
-    user=os.getenv("GUMAWILSON_SQL_AC"),
-    password=os.getenv("GUMAWILSON_SQL_PW"),
-    database="gumawilson",
-)
-
-
 # Call a stored procedure with no return
 def call_stored_procedure_no_return(
     procedure_name: str, params: tuple
 ) -> None:
+    db = mysql.connector.connect(
+    host="localhost",
+    user=os.getenv("GUMAWILSON_SQL_AC"),
+    password=os.getenv("GUMAWILSON_SQL_PW"),
+    database="gumawilson",
+    )
     cursor = db.cursor()
     cursor.callproc(procedure_name, params)
     db.commit()
     cursor.close()
+    db.close()
 
 
 # Call a stored procedure with return valie
 def call_stored_procedure_with_return(
     procedure_name: str, params: tuple
 ) -> list:
+    db = mysql.connector.connect(
+    host="localhost",
+    user=os.getenv("GUMAWILSON_SQL_AC"),
+    password=os.getenv("GUMAWILSON_SQL_PW"),
+    database="gumawilson",
+    )
     cursor = db.cursor()
     result = cursor.callproc(procedure_name, params)
     cursor.close()
+    db.close()
     return result
 
 

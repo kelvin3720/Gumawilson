@@ -249,8 +249,10 @@ async def check(
             # API for a specific match uses timestamp in milliseconds,
             # but timestamp for list of match ids uses timestamp in seconds
             end_time_extend = get_game_end_timestamp(last_match_in_list)
+            # Convert to datetime
+            section_end_time = datetime.fromtimestamp(end_time_extend)
             result = get_solo_ranked_match_ids(
-                puuid, start_time, end_time_extend
+                puuid, start_time, section_end_time
             )
             match_id_list.extend(result)
         # Remove duplicate

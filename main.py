@@ -205,6 +205,9 @@ async def check(
         end_time = datetime.combine(
             last_day_of_last_month, datetime.max.time()
         )
+    else:
+        await ctx.send(f"Invalid period")
+        return
 
     # Convert to UTC for Riot API
     local = pytz.timezone(local_timezone)

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
+import functools
 import os
-from typing import List, Tuple
+from typing import Any, Callable, List, Tuple
 import requests
 import discord
 from discord.ext import commands
@@ -18,6 +19,8 @@ DEFAULT_PERIOD_LIST = [
     "last_week",
     "last_month",
 ]
+REGION_V4_LIST = ["br1", "eun1", "euw1", "jp1", "kr", "la1", "la2", "na1", "oc1", "tr1", "ru", "ph2", "sg2", "th2", "tw2", "vn2"]
+REGION_V5_LIST = ["americas", "asia", "europe", "sea"]
 
 
 # Global variables
@@ -42,6 +45,13 @@ bot = commands.Bot(
     intents=intents,
     help_command=commands.DefaultHelpCommand(no_category="Commands"),
 )
+
+
+# For calling apis
+async def run_blocking(blocking_func: Callable, *args, **kwargs) -> Any:
+    """Runs a blocking function in a non-blocking way"""
+    func = functools.partial(blocking_func, *args, **kwargs) # `run_in_executor` doesn't support kwargs, `functools.partial` does
+    return await bot.loop.run_in_executor(None, func)
 
 
 # Helper functions
@@ -133,48 +143,8 @@ def get_game_end_timestamp(match_id: str) -> int:
     return timestamp
 
 
-# Discord bot commands
-@bot.command()
-async def check(
-    ctx,
-    summoner_name=commands.parameter(
-        default=None, description="Name of summoner"
-    ),
-    period=commands.parameter(
-        default=None,
-        description='One of ["today", "yesterday", "last_week", "last_month"]',
-    ),
-) -> None:
-    """Check a player, call !check only will check the default one"""
-    # Use default if None is given
-    if summoner_name is None:
-        summoner_name = default_summoner_name
-    if period is None:
-        period = default_period
-
-    if summoner_name == "":
-        await ctx.send("Please specify a summoner name or set a default one")
-        return
-    if period == "":
-        await ctx.send(
-            'Please specify a period or set a default one from ["today", "yesterday", "last_week", "last_month"]'
-        )
-        return
-    if region_v4 == "":
-        await ctx.send(
-            'Please set region_v4 from ["br1", "eun1", "euw1", "jp1", "kr", "la1", "la2", "na1", "oc1", "tr1", "ru", "ph2", "sg2", "th2", "tw2", "vn2"]'
-        )
-        return
-    if region_v5 == "":
-        await ctx.send(
-            'Please set region_v5 from ["americas", "asia", "europe", "sea"]'
-        )
-        return
-
-    await ctx.send(
-        f"Checking {summoner_name} in {region_v4}, {region_v5} for {period}..."
-    )
-
+# Long function, return status and message
+def blocking_check(summoner_name: str, period: str) -> Tuple[bool, str]:
     # Get the start_time according to period
     now = datetime.now()
     today = datetime.today()
@@ -206,8 +176,7 @@ async def check(
             last_day_of_last_month, datetime.max.time()
         )
     else:
-        await ctx.send(f"Invalid period")
-        return
+        return False, f"Invaild period"
 
     # Convert to UTC for Riot API
     local = pytz.timezone(local_timezone)
@@ -222,12 +191,10 @@ async def check(
         puuid: str = details["puuid"]
         summoner_id: str = details["id"]
     except Exception as e:
-        await ctx.send(f"{str(e)} when getting summoner id")
-        return
+        return False, f"{str(e)} when getting summoner id"
 
     if puuid is None:
-        await ctx.send(f"Error getting puuid")
-        return
+        return False, f"Error getting puuid"
 
     # Check if summoner exists in database, create new if not exist
     try:
@@ -236,8 +203,7 @@ async def check(
             dbo.add_summoner(summoner_name, summoner_id, puuid)
             summoner_exist = True
     except Exception as e:
-        await ctx.send(f"Failed to collect database data")
-        return
+        return False, f"Failed to collect database data, {str(e)}"
 
     # Get the list of match ids in the period of time
     try:
@@ -261,16 +227,12 @@ async def check(
         # Remove duplicate
         match_id_list = list(set(match_id_list))
     except Exception as e:
-        await ctx.send(str(e))
-        f"{str(e)} when getting match ids"
-        return
+        return False, f"{str(e)} when getting match ids"
 
     if match_id_list is None:
-        await ctx.send(f"Error getting match_id_list")
-        return
+        return False, f"Error getting match_id_list"
     elif len(match_id_list) == 0:
-        await ctx.send(f"No match is played in the time period")
-        return
+        return False, f"No match is played in the time period"
 
     # Check if the matches exist in db
     match_list_not_in_db = dbo.get_match_ids_not_in_db(match_id_list)
@@ -317,9 +279,7 @@ async def check(
     try:
         wins, losses = dbo.count_win_lose(match_id_list, puuid)
     except Exception as e:
-        await ctx.send(str(e))
-        f"{str(e)} when getting number of win and losses"
-        return
+        return False, f"{str(e)} when getting number of win and losses"
     games = wins + losses
 
     # Calculate win rate in selected period
@@ -332,9 +292,7 @@ async def check(
     try:
         profile_dict = get_solo_rank_lp(summoner_id)
     except Exception as e:
-        await ctx.send(str(e))
-        f"{str(e)} when getting rank and lp"
-        return
+        return False, f"{str(e)} when getting rank and lp"
 
     # Calculate the total win rate
     total_wins = profile_dict["total_wins"]
@@ -358,7 +316,51 @@ Win rate: {win_rate}
 Total wins: {str(total_wins)}
 Total losses: {str(total_losses)}
 Total win rate: {total_win_rate}"""
-    await ctx.send(message)
+    return True, message
+
+
+# Discord bot commands
+@bot.command()
+async def check(
+    ctx,
+    summoner_name=commands.parameter(
+        default=None, description="Name of summoner"
+    ),
+    period=commands.parameter(
+        default=None,
+        description='One of ["today", "yesterday", "last_week", "last_month"]',
+    ),
+) -> None:
+    """Check a player, call !check only will check the default one"""
+    # Use default if None is given
+    if summoner_name is None:
+        summoner_name = default_summoner_name
+    if period is None:
+        period = default_period
+
+    if summoner_name == "":
+        await ctx.send("Please specify a summoner name or set a default one")
+        return
+    if period == "":
+        await ctx.send(
+            'Please specify a period or set a default one from ["today", "yesterday", "last_week", "last_month"]'
+        )
+        return
+    if region_v4 == "":
+        await ctx.send(
+            'Please set region_v4 from ["br1", "eun1", "euw1", "jp1", "kr", "la1", "la2", "na1", "oc1", "tr1", "ru", "ph2", "sg2", "th2", "tw2", "vn2"]'
+        )
+        return
+    if region_v5 == "":
+        await ctx.send(
+            'Please set region_v5 from ["americas", "asia", "europe", "sea"]'
+        )
+        return
+
+    await ctx.send(f"Checking {summoner_name} in {region_v4}, {region_v5} for {period}...")
+
+    result: Tuple[bool, str] = await run_blocking(blocking_check, summoner_name, period)
+    await ctx.send(result[1])
 
 
 @bot.command()
@@ -369,19 +371,29 @@ async def set_default(
     ),
     region4=commands.parameter(
         default=region_v4,
-        description='One of ["br1", "eun1", "euw1", "jp1", "kr", "la1", "la2", "na1", "oc1", "tr1", "ru", "ph2", "sg2", "th2", "tw2", "vn2"]',
+        description=f"One of [{', '.join(REGION_V4_LIST)}]",
     ),
     region5=commands.parameter(
         default=region_v5,
-        description='One of ["americas", "asia", "europe", "sea"]',
+        description=f"One of [{', '.join(REGION_V5_LIST)}]'"
     ),
     period=commands.parameter(
         default=default_period,
-        description='One of ["today", "yesterday", "last_week", "last_month"]',
+        description=f"One of [{', '.join(DEFAULT_PERIOD_LIST)}]'"
     ),
 ) -> None:
     """Set the default values"""
-    # If wrong period in inputted
+    # If wrong args are inputted
+    if region4 not in REGION_V4_LIST:
+        await ctx.send(
+            f"Incorrect region_v4, available: [{', '.join(REGION_V4_LIST)}]"
+        )
+        return
+    if region5 not in REGION_V5_LIST:
+        await ctx.send(
+            f"Incorrect region_v5, available: [{', '.join(REGION_V5_LIST)}]"
+        )
+        return
     if period not in DEFAULT_PERIOD_LIST:
         await ctx.send(
             f"Incorrect period, available: [{', '.join(DEFAULT_PERIOD_LIST)}]"

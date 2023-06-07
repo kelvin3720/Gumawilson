@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import functools
 import os
 from typing import Any, Callable, List, Tuple
+import re
 import requests
 import discord
 from discord.ext import commands
@@ -18,6 +19,9 @@ DEFAULT_PERIOD_LIST = [
     "yesterday",
     "last_week",
     "last_month",
+    "this_week",
+    "this_month",
+    "last_n_days"
 ]
 REGION_V4_LIST = ["br1", "eun1", "euw1", "jp1", "kr", "la1", "la2", "na1", "oc1", "tr1", "ru", "ph2", "sg2", "th2", "tw2", "vn2"]
 REGION_V5_LIST = ["americas", "asia", "europe", "sea"]
@@ -148,6 +152,8 @@ def blocking_check(summoner_name: str, period: str) -> Tuple[bool, str]:
     # Get the start_time according to period
     now = datetime.now()
     today = datetime.today()
+    # For re
+    pattern = r"^last_([1-9]\d*)_days$"
     if period == "today":
         start_time = datetime(now.year, now.month, now.day)
         end_time = now
@@ -175,6 +181,28 @@ def blocking_check(summoner_name: str, period: str) -> Tuple[bool, str]:
         end_time = datetime.combine(
             last_day_of_last_month, datetime.max.time()
         )
+    elif period == "this_week":
+        end_time = now
+        if today.weekday() == 6:
+            start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        else:
+            start_date = now - timedelta(days=today.weekday() + 1)
+            start_time = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "this_month":
+        end_time = now
+        start_time = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif re.search(pattern, period):
+        end_time = now
+        match = re.search(pattern, period)
+        days = int(match.group(1))
+        if days < 1:
+            return False, f"Please input correct number of days (>0)"
+        if days > 100:
+            # My API key does not allow much calls at the same time
+            # Let 100 be the end
+            return False, f"Please search at most 100 days"
+        start_date = now - timedelta(days=days)
+        start_time = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
         return False, f"Invaild period"
 
@@ -304,7 +332,7 @@ def blocking_check(summoner_name: str, period: str) -> Tuple[bool, str]:
         total_win_rate = "0%"
 
     # Display details on chat
-    message = f"""Player: {summoner_name}
+    message = f"""```Player: {summoner_name}
 
 === Period Data ===
 Period: {period}
@@ -315,7 +343,7 @@ Win rate: {win_rate}
 === Season Data ===
 Total wins: {str(total_wins)}
 Total losses: {str(total_losses)}
-Total win rate: {total_win_rate}"""
+Total win rate: {total_win_rate}```"""
     return True, message
 
 
@@ -328,7 +356,7 @@ async def check(
     ),
     period=commands.parameter(
         default=None,
-        description='One of ["today", "yesterday", "last_week", "last_month"]',
+        description=f"Use !show_period to show options",
     ),
 ) -> None:
     """Check a player, call !check only will check the default one"""
@@ -343,17 +371,17 @@ async def check(
         return
     if period == "":
         await ctx.send(
-            'Please specify a period or set a default one from ["today", "yesterday", "last_week", "last_month"]'
+            f"Please specify a period or set a default one from [{', '.join(DEFAULT_PERIOD_LIST)}]"
         )
         return
     if region_v4 == "":
         await ctx.send(
-            'Please set region_v4 from ["br1", "eun1", "euw1", "jp1", "kr", "la1", "la2", "na1", "oc1", "tr1", "ru", "ph2", "sg2", "th2", "tw2", "vn2"]'
+            f"Please set region_v4 from [{', '.join(REGION_V4_LIST)}]"
         )
         return
     if region_v5 == "":
         await ctx.send(
-            'Please set region_v5 from ["americas", "asia", "europe", "sea"]'
+            f"Please set region_v5 from [{', '.join(REGION_V5_LIST)}]"
         )
         return
 
@@ -415,6 +443,12 @@ async def info(ctx):
     """Show legal boilerplate"""
     legal_boilerplate = "Gumawilson isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc."
     await ctx.send(legal_boilerplate)
+
+
+@bot.command()
+async def show_period(ctx):
+    """Show available options for period"""
+    await ctx.send(f"```[{', '.join(DEFAULT_PERIOD_LIST)}]```")
 
 
 # Start the bot

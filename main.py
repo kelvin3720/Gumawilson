@@ -252,8 +252,6 @@ def blocking_check(summoner_name: str, period: str) -> Tuple[bool, str]:
                 puuid, start_time, section_end_time
             )
             match_id_list.extend(result)
-        # Remove duplicate
-        match_id_list = list(set(match_id_list))
     except Exception as e:
         return False, f"{str(e)} when getting match ids"
 
@@ -326,6 +324,8 @@ def blocking_check(summoner_name: str, period: str) -> Tuple[bool, str]:
     total_wins = profile_dict["total_wins"]
     total_losses = profile_dict["total_losses"]
     total_games = total_wins + total_losses
+    rank = profile_dict["rank"]
+    points = profile_dict["lp"]
     if not total_games == 0:
         total_win_rate = str(int(total_wins * 100 / total_games)) + "%"
     else:
@@ -333,6 +333,8 @@ def blocking_check(summoner_name: str, period: str) -> Tuple[bool, str]:
 
     # Display details on chat
     message = f"""```Player: {summoner_name}
+
+{rank} {str(points)}
 
 === Period Data ===
 Period: {period}

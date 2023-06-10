@@ -198,3 +198,35 @@ END$$
 
 DELIMITER ;
 
+USE `gumawilson`;
+DROP procedure IF EXISTS `gumawilson`.`sp_match_player_detail`;
+
+DELIMITER $$
+USE `gumawilson`$$
+CREATE DEFINER=`root`@`%` PROCEDURE `sp_match_player_detail`(
+  IN p_match_id VARCHAR(45),
+  IN p_puuid  VARCHAR(100),
+  OUT p_kills INT,
+  OUT p_deaths INT,
+  OUT p_assists INT,
+  OUT p_champion VARCHAR(100),
+  OUT p_posistion VARCHAR(45),
+  OUT p_minions_killed INT,
+  OUT p_gold_earned INT,
+  OUT p_damage_to_champions INT,
+  OUT p_end_datetime DATETIME(3),
+  OUT p_win INT
+)
+BEGIN
+  SELECT kills, deaths, assists, champion_name, individual_posistion, minions_killed, gold_earned, damage_to_champions, win
+  INTO p_kills, p_deaths, p_assists, p_champion, p_posistion, p_minions_killed, p_gold_earned, p_damage_to_champions, p_win
+  FROM match_players
+  
+  WHERE match_id = p_match_id AND puuid = p_puuid;
+  SELECT game_end_datetime INTO p_end_datetime
+  FROM matches
+  WHERE match_id = p_match_id;
+END$$
+
+DELIMITER ;
+

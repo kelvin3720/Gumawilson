@@ -130,3 +130,10 @@ def count_win_lose(match_id_list: List[str], puuid: str) -> Tuple[int, int]:
             losses += 1
 
     return wins, losses
+
+
+# Get the detailed string from puuid and match_id
+def get_details(match_id: str, puuid: str) -> dict:
+    params = (match_id, puuid, 0, 0, 0, "", "", 0, 0, 0, None, 0)
+    result = call_stored_procedure_with_return("sp_match_player_detail", params)
+    return  dict(kills = result[2], deaths = result[3], assists = result[4], champion = result[5], posistion = result[6], minions_killed = result[7], gold_earned = result[8], damage_to_champions = result[9], game_end = result[10], win = result[11])

@@ -172,7 +172,7 @@ def get_game_end_timestamp(match_id: str) -> int:
 
 
 # Long function, return status and message
-def blocking_check(summoner_name: str, period: str) -> Tuple[bool, str]:
+def blocking_check(summoner_name: str, period: str, mode: str) -> Tuple[bool, str]:
     # Get the start_time according to period
     now = datetime.now()
     today = datetime.today()
@@ -361,8 +361,17 @@ def blocking_check(summoner_name: str, period: str) -> Tuple[bool, str]:
     else:
         total_win_rate = "0%"
 
+    # Add detailed content
+    if mode == "normal":
+        detailed_str = ""
+    elif mode == "detailed":
+        try:
+            detailed_str = get_detailed_str(puuid, match_id_list)
+        except Exception as e:
+            detailed_str = f"Failed to get detail: {str(e)}"
+
     # Display details on chat
-    message = f"""```Player: {summoner_name}
+    message = f"""Player: {summoner_name}
 
 {rank} {str(points)}
 
@@ -375,8 +384,231 @@ Win rate: {win_rate}
 === Season Data ===
 Total wins: {str(total_wins)}
 Total losses: {str(total_losses)}
-Total win rate: {total_win_rate}```"""
+Total win rate: {total_win_rate}{detailed_str}"""
     return True, message
+
+
+# Get the detailed string for !check
+def get_detailed_str(puuid: str, match_id_list: List[str]) -> str:
+    # Header
+    result = "\n\n=== Details ===\n"
+    # Content
+    index = 1
+
+    summary_dict = {
+        "posistion_played": set(),
+        "champion_played": set()
+    }
+
+    for match_id in match_id_list:
+        # Get details in a game
+        # KDA, champion, posistion, cs, gold, damage, gold/damage
+        details: dict = dbo.get_details(match_id, puuid)
+        if details["posistion"] == "UTILITY":
+            details["posistion"] = "SUPPORT"
+
+        if details["win"]:
+            win_lose = "WIN ✅"
+        else:
+            win_lose = "Lose ❌"
+        end_time = details["game_end"][:-4]
+        champion = details["champion"]
+        posistion = details["posistion"]
+        kills = int(details["kills"])
+        deaths = int(details["deaths"])
+        assists = int(details["assists"])
+        kda = f'{str(kills)}/{str(deaths)}/{str(assists)}'
+        cs = int(details["minions_killed"])
+        gold_earned = int(details["gold_earned"])
+        damage_to_champions = int(details["damage_to_champions"])
+        if deaths == 0:
+            kda_value = kills + assists
+        else:
+            kda_value = round((kills+deaths)/deaths, 2)
+        if gold_earned == 0:
+            damage_per_gold = damage_to_champions
+        else:
+            damage_per_gold = round(damage_to_champions/gold_earned, 2)
+
+        result += f"""Game {str(index)}, {win_lose}
+End time: {end_time}
+Champion: {champion}
+Posistion: {posistion}
+KDA: {kda}, {str(kda_value)}
+CS: {str(cs)}
+Gold earned: {str(gold_earned)}
+Damage to champtions: {str(damage_to_champions)}
+Damage per gold: {str(damage_per_gold)}
+
+"""
+        index += 1
+
+        ## Store data for summary
+        # Posistion played
+        if posistion in summary_dict:
+            summary_dict[posistion] += 1
+        else:
+            summary_dict[posistion] = 1
+
+        # Posistion win
+        posistion_win = posistion + "_win"
+        if posistion_win in summary_dict:
+            if details["win"]:
+                summary_dict[posistion_win] += 1
+        else:
+            if details["win"]:
+                summary_dict[posistion_win] = 1
+            else:
+                summary_dict[posistion_win] = 0
+
+        # Posistion kda
+        posistion_k = posistion + "_k"
+        if posistion_k in summary_dict:
+            summary_dict[posistion_k] += kills
+        else:
+            summary_dict[posistion_k] = kills
+
+        posistion_d = posistion + "_d"
+        if posistion_d in summary_dict:
+            summary_dict[posistion_d] += deaths
+        else:
+            summary_dict[posistion_d] = deaths
+
+        posistion_a = posistion + "_a"
+        if posistion_a in summary_dict:
+            summary_dict[posistion_a] += assists
+        else:
+            summary_dict[posistion_a] = assists
+
+        # Champion played
+        if champion in summary_dict:
+            summary_dict[champion] += 1
+        else:
+            summary_dict[champion] = 1
+
+        # Champion win
+        champion_win = champion + "_win"
+        if champion_win in summary_dict:
+            if details["win"]:
+                summary_dict[champion_win] += 1
+        else:
+            if details["win"]:
+                summary_dict[champion_win] = 1
+            else:
+                summary_dict[champion_win] = 0
+
+        # Champion kda
+        champion_k = champion + "_k"
+        if champion_k in summary_dict:
+            summary_dict[champion_k] += kills
+        else:
+            summary_dict[champion_k] = kills
+
+        champion_d = champion + "_d"
+        if champion_d in summary_dict:
+            summary_dict[champion_d] += deaths
+        else:
+            summary_dict[champion_d] = deaths
+
+        champion_a = champion + "_a"
+        if champion_a in summary_dict:
+            summary_dict[champion_a] += assists
+        else:
+            summary_dict[champion_a] = assists
+
+        # Total kda
+        if 'kills' in summary_dict:
+            summary_dict['kills'] += kills
+        else:
+            summary_dict['kills'] = kills
+
+        if 'deaths' in summary_dict:
+            summary_dict['deaths'] += deaths
+        else:
+            summary_dict['deaths'] = deaths
+
+        if 'assists' in summary_dict:
+            summary_dict['assists'] += assists
+        else:
+            summary_dict['assists'] = assists
+
+        summary_dict["posistion_played"].add(posistion)
+        summary_dict["champion_played"].add(champion)
+
+    # Calculate sumnmary
+    # Posistion played, posistion win rate, posistion kda,
+    # champion played, champion win rate, champion kda,
+    # total kda
+    result += "***Posistion Data***\n"
+
+    for pos in summary_dict["posistion_played"]:
+        posistion_wins = int(summary_dict[pos+'_win'])
+        posistion_loses = int(summary_dict[pos]) - posistion_wins
+        posistion_win_rate = round(summary_dict[pos+'_win']/summary_dict[pos])*100
+        posistion_kill = int(summary_dict[pos+'_k'])
+        posistion_death = int(summary_dict[pos+'_d'])
+        posistion_assists = int(summary_dict[pos+'_a'])
+        if posistion_death == 0:
+            posistion_kda_value = posistion_kill + posistion_assists
+        else:
+            posistion_kda_value = round((posistion_kill + posistion_assists)/posistion_death, 2)
+        result += f"""{pos}
+Number of games: {str(summary_dict[pos])}
+Win rate: {str(posistion_wins)}/{str(posistion_loses)}, {str(posistion_win_rate)}%
+KDA: {str(posistion_kill)}/{str(posistion_death)}/{str(posistion_assists)}, {str(posistion_kda_value)}
+
+"""
+
+    result += "\n***Champion Data***\n"
+
+    for champ in summary_dict["champion_played"]:
+        champion_wins = int(summary_dict[champ+'_win'])
+        champion_loses = int(summary_dict[champ]) - champion_wins
+        champion_win_rate = round(champion_wins/summary_dict[champ])*100
+        champion_kill = int(summary_dict[champ+'_k'])
+        champion_death = int(summary_dict[champ+'_d'])
+        champion_assists = int(summary_dict[champ+'_a'])
+        if champion_death == 0:
+            champion_kda_value = champion_kill + champion_assists
+        else:
+            champion_kda_value = round((champion_kill + champion_assists)/champion_death, 2)
+        result += f"""{champ}
+Number of games: {str(summary_dict[champ])}
+Win rate: {str(champion_wins)}/{str(champion_loses)}, {str(champion_win_rate)}%
+KDA: {str(champion_kill)}/{str(champion_death)}/{str(champion_assists)}, {str(champion_kda_value)}
+
+"""
+
+    result += "\n***Total Data***\n"
+
+    total_kills = int(summary_dict["kills"])
+    total_deaths = int(summary_dict["deaths"])
+    total_assists = int(summary_dict["assists"])
+    if total_deaths == 0:
+        total_kda_value =  total_kills + total_assists
+    else:
+        total_kda_value = round((total_kills + total_assists)/total_deaths, 2)
+
+    result += f"""Number of games: {str(index)}
+KDA: {str(total_kills)}/{str(total_deaths)}/{str(total_assists)}, {str(total_kda_value)}"""
+
+    return result
+
+
+# Divide string into substrings to avoid them exceed 2000 character (Discrod limit)
+def split_string(text: str, max_length: int) -> List[str]:
+    output = []
+    lines = text.split('\n')
+    current_line = ''
+
+    for line in lines:
+        if len(current_line + line) > max_length:
+            output.append(current_line)
+            current_line = ''
+        current_line += line + '\n'
+
+    output.append(current_line)
+    return output
 
 
 # Discord bot commands
@@ -388,8 +620,12 @@ async def check(
     ),
     period=commands.parameter(
         default=None,
-        description=f"Use !show_period to show options",
+        description=f"Use !show_period to show options"
     ),
+    mode=commands.parameter(
+        default='normal',
+        description=f"normal or detailed"
+    )
 ) -> None:
     """Check a player, call !check only will check the default one"""
     # Use default if None is given
@@ -416,15 +652,20 @@ async def check(
             f"Please set region_v5 from [{', '.join(REGION_V5_LIST)}]"
         )
         return
+    if mode not in ["normal", "detailed"]:
+        await ctx.send("mode should be one normal or detailed")
+        return
 
     await ctx.send(
         f"Checking {summoner_name} in {region_v4}, {region_v5} for {period}..."
     )
 
     result: Tuple[bool, str] = await run_blocking(
-        blocking_check, summoner_name, period
+        blocking_check, summoner_name, period, mode
     )
-    await ctx.send(result[1])
+    
+    for text in split_string(result[1], 1950):
+        await ctx.send(f"```{text}```")
 
 
 @bot.command()

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import functools
 import os
+from sys import platform
 from typing import Any, Callable, List, Tuple
 import re
 import requests
@@ -12,8 +13,12 @@ import call_api
 import database_operations as dbo
 
 # CONSTANT
-DISCORD_TOKEN = os.getenv("GUMAWILSON_DISCORD_TOKEN")
-RIOT_API_KEY = os.getenv("GUMAWILSON_RIOT_API_KEY")
+if platform == "linux":
+    DISCORD_TOKEN = os.environ["GUMAWILSON_DISCORD_TOKEN"]
+    RIOT_API_KEY = os.environ["GUMAWILSON_RIOT_API_KEY"]
+elif platform == "win32":
+    DISCORD_TOKEN = os.getenv("GUMAWILSON_DISCORD_TOKEN")
+    RIOT_API_KEY = os.getenv("GUMAWILSON_RIOT_API_KEY")
 DEFAULT_PERIOD_LIST = [
     "today",
     "yesterday",
@@ -21,9 +26,26 @@ DEFAULT_PERIOD_LIST = [
     "last_month",
     "this_week",
     "this_month",
-    "last_n_days"
+    "last_n_days",
 ]
-REGION_V4_LIST = ["br1", "eun1", "euw1", "jp1", "kr", "la1", "la2", "na1", "oc1", "tr1", "ru", "ph2", "sg2", "th2", "tw2", "vn2"]
+REGION_V4_LIST = [
+    "br1",
+    "eun1",
+    "euw1",
+    "jp1",
+    "kr",
+    "la1",
+    "la2",
+    "na1",
+    "oc1",
+    "tr1",
+    "ru",
+    "ph2",
+    "sg2",
+    "th2",
+    "tw2",
+    "vn2",
+]
 REGION_V5_LIST = ["americas", "asia", "europe", "sea"]
 
 
@@ -54,7 +76,9 @@ bot = commands.Bot(
 # For calling apis
 async def run_blocking(blocking_func: Callable, *args, **kwargs) -> Any:
     """Runs a blocking function in a non-blocking way"""
-    func = functools.partial(blocking_func, *args, **kwargs) # `run_in_executor` doesn't support kwargs, `functools.partial` does
+    func = functools.partial(
+        blocking_func, *args, **kwargs
+    )  # `run_in_executor` doesn't support kwargs, `functools.partial` does
     return await bot.loop.run_in_executor(None, func)
 
 
@@ -162,7 +186,7 @@ def blocking_check(summoner_name: str, period: str) -> Tuple[bool, str]:
         start_time = datetime.combine(yesterday, datetime.min.time())
         end_time = datetime.combine(yesterday, datetime.max.time())
     elif period == "last_week":
-        date_index = (today.weekday() +1) % 7
+        date_index = (today.weekday() + 1) % 7
         last_sunday = today - timedelta(date_index + 7)
         last_saturday = last_sunday + timedelta(days=6)
         start_time = datetime.combine(last_sunday, datetime.min.time())
@@ -187,10 +211,14 @@ def blocking_check(summoner_name: str, period: str) -> Tuple[bool, str]:
             start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
         else:
             start_date = now - timedelta(days=today.weekday() + 1)
-            start_time = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            start_time = start_date.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
     elif period == "this_month":
         end_time = now
-        start_time = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        start_time = now.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
     elif re.search(pattern, period):
         end_time = now
         match = re.search(pattern, period)
@@ -202,7 +230,9 @@ def blocking_check(summoner_name: str, period: str) -> Tuple[bool, str]:
             # Let 100 be the end
             return False, f"Please search at most 100 days"
         start_date = now - timedelta(days=days)
-        start_time = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_time = start_date.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
     else:
         return False, f"Invaild period"
 
@@ -387,9 +417,13 @@ async def check(
         )
         return
 
-    await ctx.send(f"Checking {summoner_name} in {region_v4}, {region_v5} for {period}...")
+    await ctx.send(
+        f"Checking {summoner_name} in {region_v4}, {region_v5} for {period}..."
+    )
 
-    result: Tuple[bool, str] = await run_blocking(blocking_check, summoner_name, period)
+    result: Tuple[bool, str] = await run_blocking(
+        blocking_check, summoner_name, period
+    )
     await ctx.send(result[1])
 
 
@@ -404,12 +438,11 @@ async def set_default(
         description=f"One of [{', '.join(REGION_V4_LIST)}]",
     ),
     region5=commands.parameter(
-        default=region_v5,
-        description=f"One of [{', '.join(REGION_V5_LIST)}]'"
+        default=region_v5, description=f"One of [{', '.join(REGION_V5_LIST)}]'"
     ),
     period=commands.parameter(
         default=default_period,
-        description=f"One of [{', '.join(DEFAULT_PERIOD_LIST)}]'"
+        description=f"One of [{', '.join(DEFAULT_PERIOD_LIST)}]'",
     ),
 ) -> None:
     """Set the default values"""

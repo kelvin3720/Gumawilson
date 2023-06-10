@@ -1,6 +1,16 @@
 import os
+from sys import platform
 from typing import List, Tuple
 import mysql.connector
+
+
+# Global variable
+if platform == "linux":
+    sql_user = os.environ["GUMAWILSON_SQL_AC"]
+    sql_password = os.environ["GUMAWILSON_SQL_PW"]
+elif platform == "win32":
+    sql_user = os.getenv("GUMAWILSON_SQL_AC")
+    sql_password = os.getenv("GUMAWILSON_SQL_PW")
 
 
 # Call a stored procedure with no return
@@ -9,8 +19,8 @@ def call_stored_procedure_no_return(
 ) -> None:
     db = mysql.connector.connect(
         host="localhost",
-        user=os.getenv("GUMAWILSON_SQL_AC"),
-        password=os.getenv("GUMAWILSON_SQL_PW"),
+        user=sql_user,
+        password=sql_password,
         database="gumawilson",
     )
     cursor = db.cursor()
@@ -26,8 +36,8 @@ def call_stored_procedure_with_return(
 ) -> list:
     db = mysql.connector.connect(
         host="localhost",
-        user=os.getenv("GUMAWILSON_SQL_AC"),
-        password=os.getenv("GUMAWILSON_SQL_PW"),
+        user=sql_user,
+        password=sql_password,
         database="gumawilson",
     )
     cursor = db.cursor()

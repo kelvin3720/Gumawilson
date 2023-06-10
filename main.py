@@ -544,7 +544,7 @@ Damage per gold: {str(damage_per_gold)}
     for pos in summary_dict["posistion_played"]:
         posistion_wins = int(summary_dict[pos+'_win'])
         posistion_loses = int(summary_dict[pos]) - posistion_wins
-        posistion_win_rate = round(summary_dict[pos+'_win']/summary_dict[pos])*100
+        posistion_win_rate = round(summary_dict[pos+'_win']/summary_dict[pos], 2)*100
         posistion_kill = int(summary_dict[pos+'_k'])
         posistion_death = int(summary_dict[pos+'_d'])
         posistion_assists = int(summary_dict[pos+'_a'])
@@ -564,7 +564,7 @@ KDA: {str(posistion_kill)}/{str(posistion_death)}/{str(posistion_assists)}, {str
     for champ in summary_dict["champion_played"]:
         champion_wins = int(summary_dict[champ+'_win'])
         champion_loses = int(summary_dict[champ]) - champion_wins
-        champion_win_rate = round(champion_wins/summary_dict[champ])*100
+        champion_win_rate = round(champion_wins/summary_dict[champ], 2)*100
         champion_kill = int(summary_dict[champ+'_k'])
         champion_death = int(summary_dict[champ+'_d'])
         champion_assists = int(summary_dict[champ+'_a'])

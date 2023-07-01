@@ -225,10 +225,10 @@ def blocking_check(summoner_name: str, period: str, mode: str) -> Tuple[bool, st
         days = int(match.group(1))
         if days < 1:
             return False, f"Please input correct number of days (>0)"
-        if days > 100:
+        if days > 150:
             # My API key does not allow much calls at the same time
-            # Let 100 be the end
-            return False, f"Please search at most 100 days"
+            # Let 150 be the end
+            return False, f"Please search at most 150 days"
         start_date = now - timedelta(days=days)
         start_time = start_date.replace(
             hour=0, minute=0, second=0, microsecond=0
@@ -589,7 +589,7 @@ KDA: {str(champion_kill)}/{str(champion_death)}/{str(champion_assists)}, {str(ch
     else:
         total_kda_value = round((total_kills + total_assists)/total_deaths, 2)
 
-    result += f"""Number of games: {str(index)}
+    result += f"""Number of games: {str(index-1)}
 KDA: {str(total_kills)}/{str(total_deaths)}/{str(total_assists)}, {str(total_kda_value)}"""
 
     return result

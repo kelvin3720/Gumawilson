@@ -589,7 +589,7 @@ KDA: {str(champion_kill)}/{str(champion_death)}/{str(champion_assists)}, {str(ch
     else:
         total_kda_value = round((total_kills + total_assists)/total_deaths, 2)
 
-    result += f"""Number of games: {str(index)}
+    result += f"""Number of games: {str(index-1)}
 KDA: {str(total_kills)}/{str(total_deaths)}/{str(total_assists)}, {str(total_kda_value)}"""
 
     return result

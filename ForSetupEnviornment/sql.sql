@@ -203,7 +203,7 @@ DROP procedure IF EXISTS `gumawilson`.`sp_match_player_detail`;
 
 DELIMITER $$
 USE `gumawilson`$$
-CREATE DEFINER=`root`@`%` PROCEDURE `sp_match_player_detail`(
+CREATE PROCEDURE `sp_match_player_detail`(
   IN p_match_id VARCHAR(45),
   IN p_puuid  VARCHAR(100),
   OUT p_kills INT,

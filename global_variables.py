@@ -16,7 +16,6 @@ DEFAULT_PERIOD_LIST = [
     "last_month",
     "this_week",
     "this_month",
-    "last_n_days",
 ]
 REGION_V4_LIST = [
     "br1",

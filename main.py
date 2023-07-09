@@ -55,13 +55,14 @@ async def run_blocking(blocking_func: Callable, *args, **kwargs) -> Any:
     max_value=150,
 )
 async def check(
-    interaction: discord.Interaction,
+    ctx,
     summoner_name: str,
     period: str,
     mode: str,
     days: int,
 ) -> None:
     """Check a player, call !check only will check the default one"""
+    interaction = ctx.interaction
     # Use default if None is given
     if summoner_name is None:
         summoner_name = gv.default_summoner_name
@@ -93,12 +94,13 @@ async def check(
     if days is not None:
         period = f"last_{str(days)}_days"
 
+    await interaction.response.send_message(f"Checking started", ephemeral=True)
     result: Tuple[bool, str] = await run_blocking(
         core.blocking_check, summoner_name, period, mode
     )
 
     for text in core.split_string(result[1], 1950):
-        await interaction.response.send_message(f"```{text}```")
+        await ctx.send(f"```{text}```")
 
 
 @bot.slash_command(name="set_default")
@@ -113,7 +115,6 @@ async def check(
 )
 async def set_default(
     ctx,
-    # interaction: discord.Interaction,
     summoner_name: str,
     region4: str,
     region5: str,

@@ -1,8 +1,7 @@
 import functools
 from typing import Any, Callable, List, Tuple
-import discord  # discord.py
-from discord.ext import commands  # discord.py
-from discord import option  # Pycord
+import discord
+from discord import option
 import core
 import global_variables as gv
 
@@ -11,8 +10,7 @@ import global_variables as gv
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
-bot = commands.Bot(
-    command_prefix="!",
+bot = discord.Bot(
     intents=intents,
 )
 

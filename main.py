@@ -94,7 +94,9 @@ async def check(
     if days is not None:
         period = f"last_{str(days)}_days"
 
-    await interaction.response.send_message(f"Checking started", ephemeral=True)
+    await interaction.response.send_message(
+        f"Checking started, called by {ctx.author.name}"
+    )
     result: Tuple[bool, str] = await run_blocking(
         core.blocking_check, summoner_name, period, mode
     )

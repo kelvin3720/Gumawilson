@@ -138,8 +138,7 @@ def blocking_check(summoner_name: str, period: str, mode: str) -> Tuple[bool, st
             # My API key does not allow much calls at the same time
             # Let 150 be the end
             return False, f"Please search at most 150 days"
-        start_date = now - timedelta(days=days)
-        start_time = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_time = now - timedelta(days=days)
     else:
         return False, f"Invaild period"
 
@@ -204,6 +203,13 @@ def blocking_check(summoner_name: str, period: str, mode: str) -> Tuple[bool, st
         # [match_id, region_v5, gameStartTimeStamp, gameMode, gameType, gameDuration, gameEndTimestamp, queueId, platformId, game_end_datetime]
         # Where item in snake case is from python and camel case is from Riot's API
         # Timestamps here are in milliseconds (From Riot Match-V5 API)
+        
+        # Avoid bug caused by empty game returned by Riot
+        # e.g. TW2_92598712
+        if len(result["info"]["participants"]) == 0:
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"{now_str} Error on match_id {match_id}")
+            continue
         match_detail = [match_id, gv.region_v5]
         # gameStartTimestamp
         match_detail.append(result["info"]["gameStartTimestamp"])
